@@ -4,19 +4,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,8 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.rounded.CheckBox
+import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -34,11 +30,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.kartiks.habittracker.domain.model.HabitType
 
@@ -52,8 +47,8 @@ fun ExpandingFab(
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 45f else 0f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
         ),
         label = "fab_rotation"
     )
@@ -61,49 +56,65 @@ fun ExpandingFab(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.Bottom
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Yes / No Action Popout
         AnimatedVisibility(
             visible = isExpanded,
-            enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                    slideInVertically(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) { it / 2 },
-            exit = fadeOut(spring(stiffness = Spring.StiffnessHigh)) +
-                    slideOutVertically(spring(stiffness = Spring.StiffnessHigh)) { it / 2 }
+            enter = fadeIn(
+                animationSpec = tween(durationMillis = 180, delayMillis = 60)
+            ) + slideInVertically(
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+            ) { it / 2 },
+            exit = fadeOut(
+                animationSpec = tween(durationMillis = 100, delayMillis = 0)
+            ) + slideOutVertically(
+                animationSpec = spring(stiffness = Spring.StiffnessHigh)
+            ) { it / 2 }
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                // Yes / No Action Popout
-                FabActionItem(
-                    label = "Yes / No",
-                    icon = Icons.Default.Check,
-                    onClick = { onSelectType(HabitType.YES_NO) }
-                )
+            FabActionItem(
+                label = "Yes / No",
+                icon = Icons.Rounded.CheckBox,
+                onClick = { onSelectType(HabitType.YES_NO) }
+            )
+        }
 
-                // Measurable Action Popout
-                FabActionItem(
-                    label = "Measurable",
-                    icon = Icons.Default.Speed,
-                    onClick = { onSelectType(HabitType.MEASURABLE) }
-                )
-            }
+        // Measurable Action Popout
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = fadeIn(
+                animationSpec = tween(durationMillis = 150, delayMillis = 0)
+            ) + slideInVertically(
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+            ) { it / 2 },
+            exit = fadeOut(
+                animationSpec = tween(durationMillis = 120, delayMillis = 50)
+            ) + slideOutVertically(
+                animationSpec = spring(stiffness = Spring.StiffnessHigh)
+            ) { it / 2 }
+        ) {
+            FabActionItem(
+                label = "Measurable",
+                icon = Icons.Rounded.Tag,
+                onClick = { onSelectType(HabitType.MEASURABLE) }
+            )
         }
 
         // Main FAB Button (morphs + to ×)
         FloatingActionButton(
             onClick = onToggle,
             shape = CircleShape,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
             modifier = Modifier.size(56.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = if (isExpanded) "Close add habit options" else "Add habit",
-                modifier = Modifier.rotate(rotation)
+                modifier = Modifier
+                    .size(24.dp)
+                    .rotate(rotation)
             )
         }
     }
@@ -112,31 +123,33 @@ fun ExpandingFab(
 @Composable
 private fun FabActionItem(
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 6.dp,
-        shadowElevation = 4.dp
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        tonalElevation = 3.dp,
+        shadowElevation = 4.dp,
+        modifier = Modifier.height(48.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }

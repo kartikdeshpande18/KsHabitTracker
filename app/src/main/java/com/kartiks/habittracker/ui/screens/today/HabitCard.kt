@@ -1,9 +1,16 @@
 package com.kartiks.habittracker.ui.screens.today
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -103,22 +111,17 @@ private fun YesNoHabitContent(
     val isCompleted = item.isCompleted
     val haptics = com.kartiks.habittracker.ui.interaction.rememberAppHaptics()
 
-    val checkScale by animateFloatAsState(
-        targetValue = if (isCompleted) 1f else 0.85f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "check_scale"
-    )
-
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = {
-                haptics.habitCompleted()
+                if (!isCompleted) {
+                    haptics.habitCompleted()
+                } else {
+                    haptics.stepTick()
+                }
                 onToggle()
             })
             .padding(16.dp)
@@ -148,26 +151,55 @@ private fun YesNoHabitContent(
         }
 
         // Right side: Circular Completion Control
-        Surface(
-            shape = CircleShape,
-            color = if (isCompleted) MaterialTheme.colorScheme.primary else Color.Transparent,
-            border = if (!isCompleted) BorderStroke(2.dp, MaterialTheme.colorScheme.outline) else null,
-            modifier = Modifier
-                .size(36.dp)
-                .scale(checkScale)
+        YesNoCheckCircle(isCompleted = isCompleted)
+    }
+}
+
+@Composable
+private fun YesNoCheckCircle(
+    isCompleted: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val checkScale by animateFloatAsState(
+        targetValue = if (isCompleted) 1f else 0.85f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "check_scale"
+    )
+
+    val checkSurfaceColor by animateColorAsState(
+        targetValue = if (isCompleted) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "check_surface_color"
+    )
+
+    Surface(
+        shape = CircleShape,
+        color = checkSurfaceColor,
+        border = if (!isCompleted) BorderStroke(2.dp, MaterialTheme.colorScheme.outline) else null,
+        modifier = modifier
+            .size(36.dp)
+            .scale(checkScale)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxWidth()
+            AnimatedVisibility(
+                visible = isCompleted,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                        scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
+                exit = fadeOut(spring(stiffness = Spring.StiffnessMediumLow)) +
+                        scaleOut()
             ) {
-                if (isCompleted) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Completed",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Completed",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
@@ -182,7 +214,12 @@ private fun MeasurableHabitContent(
     val habit = item.habit
     val currentVal = item.currentValue
     val targetVal = habit.targetValue
-    val progress = (currentVal / targetVal).toFloat().coerceIn(0f, 1f)
+    val rawProgress = (currentVal / targetVal).toFloat().coerceIn(0f, 1f)
+    val animatedProgress by animateFloatAsState(
+        targetValue = rawProgress,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "measurable_progress"
+    )
     val haptics = com.kartiks.habittracker.ui.interaction.rememberAppHaptics()
 
     Row(
@@ -215,18 +252,27 @@ private fun MeasurableHabitContent(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Value / Target display ONCE
-            Text(
-                text = "${formatValue(currentVal)} / ${formatValue(targetVal)} ${habit.unit}".trim(),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = if (item.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            AnimatedContent(
+                targetState = currentVal,
+                transitionSpec = {
+                    fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                    fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
+                },
+                label = "measurable_val_transition"
+            ) { cur ->
+                Text(
+                    text = "${formatValue(cur)} / ${formatValue(targetVal)} ${habit.unit}".trim(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (item.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
             // Linear Progress Indicator without endpoint dot
             com.kartiks.habittracker.ui.components.HabitLinearProgress(
-                progress = { progress },
+                progress = { animatedProgress },
                 modifier = Modifier.fillMaxWidth(0.9f),
                 height = 6.dp,
                 color = MaterialTheme.colorScheme.primary,

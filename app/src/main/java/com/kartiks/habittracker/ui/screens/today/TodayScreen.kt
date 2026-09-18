@@ -1,5 +1,13 @@
 package com.kartiks.habittracker.ui.screens.today
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
@@ -82,18 +91,29 @@ fun TodayScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = titleText,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitleText,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    AnimatedContent(
+                        targetState = titleText to subtitleText,
+                        transitionSpec = {
+                            fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                            fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                        },
+                        label = "date_header_transition"
+                    ) { (title, subtitle) ->
+                        Column {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
                 // Material 3 Expressive Settings Icon Button
@@ -232,6 +252,18 @@ private fun WeekDateSelectorStrip(
                 else -> MaterialTheme.colorScheme.onSurface
             }
 
+            val animatedContainerColor by animateColorAsState(
+                targetValue = containerColor,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "date_chip_container"
+            )
+
+            val animatedTextColor by animateColorAsState(
+                targetValue = textColor,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "date_chip_text"
+            )
+
             val border = when {
                 isToday && !isSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
                 else -> null
@@ -239,7 +271,7 @@ private fun WeekDateSelectorStrip(
 
             Surface(
                 shape = MaterialTheme.shapes.medium,
-                color = containerColor,
+                color = animatedContainerColor,
                 border = border,
                 modifier = Modifier
                     .width(46.dp)
@@ -256,14 +288,14 @@ private fun WeekDateSelectorStrip(
                     Text(
                         text = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(3),
                         style = MaterialTheme.typography.labelSmall,
-                        color = textColor.copy(alpha = 0.8f)
+                        color = animatedTextColor.copy(alpha = 0.8f)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = date.dayOfMonth.toString(),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = textColor
+                        color = animatedTextColor
                     )
                 }
             }
@@ -277,7 +309,12 @@ private fun TodayProgressCard(
     scheduledCount: Int,
     progress: Float
 ) {
-    val percentage = (progress * 100).toInt()
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "today_progress_animation"
+    )
+    val percentage = (animatedProgress * 100).toInt()
 
     val ringColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -314,7 +351,7 @@ private fun TodayProgressCard(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 HabitLinearProgress(
-                    progress = { progress },
+                    progress = { animatedProgress },
                     modifier = Modifier.fillMaxWidth(),
                     height = 8.dp,
                     color = ringColor,
@@ -326,7 +363,7 @@ private fun TodayProgressCard(
 
             Box(contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
-                    progress = { progress },
+                    progress = { animatedProgress },
                     modifier = Modifier.size(54.dp),
                     color = ringColor,
                     trackColor = trackColor,

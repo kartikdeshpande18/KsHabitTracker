@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,6 +52,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kartiks.habittracker.domain.model.HabitType
@@ -83,8 +87,8 @@ fun AppNavigationShell(
     val fabRotation by animateFloatAsState(
         targetValue = if (isFabExpanded) 45f else 0f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
         ),
         label = "fab_rotation"
     )
@@ -114,35 +118,96 @@ fun AppNavigationShell(
             )
         }
 
-        // 3. Bottom Navigation Controls: [ Capsule (Today | Calendar | Statistics) ] + [ Fixed 56dp FAB ]
-        // Both sit at the exact same vertical level (navBarInset + 24.dp) above the system navigation bar
+        // 3. Expanded FAB Options Overlay (anchored directly above FAB, sharing the 268dp centered control group bounds)
+        // Mathematically locks the option pills' right edge to the 64dp FAB's right edge
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = navBarInset + 24.dp + 64.dp + 10.dp)
+                .width(268.dp),
+            contentAlignment = Alignment.BottomEnd
+        ) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Yes / No Option Pill (top item in vertical stack)
+                // Enters after Measurable on open; exits first on dismiss
+                AnimatedVisibility(
+                    visible = isFabExpanded,
+                    enter = fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180, delayMillis = 60)
+                    ) + slideInVertically(
+                        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+                    ) { it / 2 },
+                    exit = fadeOut(
+                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 100, delayMillis = 0)
+                    ) + slideOutVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessHigh)
+                    ) { it / 2 }
+                ) {
+                    FabActionItem(
+                        label = "Yes / No",
+                        icon = Icons.Rounded.CheckBox,
+                        onClick = {
+                            haptics.fabToggle()
+                            onCloseFab()
+                            onSelectCreationType(HabitType.YES_NO)
+                        }
+                    )
+                }
+
+                // Measurable Option Pill (middle item, directly above FAB)
+                // Enters first on open; exits after Yes / No on dismiss
+                AnimatedVisibility(
+                    visible = isFabExpanded,
+                    enter = fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 150, delayMillis = 0)
+                    ) + slideInVertically(
+                        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+                    ) { it / 2 },
+                    exit = fadeOut(
+                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 120, delayMillis = 50)
+                    ) + slideOutVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessHigh)
+                    ) { it / 2 }
+                ) {
+                    FabActionItem(
+                        label = "Measurable",
+                        icon = Icons.Rounded.Tag,
+                        onClick = {
+                            haptics.fabToggle()
+                            onCloseFab()
+                            onSelectCreationType(HabitType.MEASURABLE)
+                        }
+                    )
+                }
+            }
+        }
+
+        // 4. Centered Bottom Controls Group: Capsule (192dp) + 12dp Gap + FAB (64dp)
+        // Group total width: 192dp + 12dp + 64dp = 268dp
+        // Sits at (navBarInset + 24.dp) above system navigation bar; center X == screen center X
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(
-                    start = 20.dp,
-                    end = 20.dp,
-                    bottom = navBarInset + 24.dp
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(bottom = navBarInset + 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Floating Capsule Navigation Bar (fixed width, completely independent from FAB expansion)
+            // Floating Compact Capsule Navigation Bar (192dp x 64dp)
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 4.dp,
                 shadowElevation = 8.dp,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(64.dp)
+                modifier = Modifier.height(64.dp)
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
+                        .fillMaxHeight()
+                        .padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     NavigationTabItem(
@@ -178,66 +243,24 @@ fun AppNavigationShell(
                 }
             }
 
-            // Fixed-size FAB Container (56dp, does not resize or remeasure capsule)
-            Box(
-                modifier = Modifier.size(56.dp),
-                contentAlignment = Alignment.Center
+            // Main FAB Button (64dp circle)
+            FloatingActionButton(
+                onClick = {
+                    haptics.fabToggle()
+                    onToggleFab()
+                },
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
+                modifier = Modifier.size(64.dp)
             ) {
-                FloatingActionButton(
-                    onClick = {
-                        haptics.fabToggle()
-                        onToggleFab()
-                    },
-                    shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = if (isFabExpanded) "Close add options" else "Add habit",
-                        modifier = Modifier.rotate(fabRotation)
-                    )
-                }
-            }
-        }
-
-        // 4. Overlaid Popouts for FAB actions (completely outside bottom Row measurement)
-        AnimatedVisibility(
-            visible = isFabExpanded,
-            enter = fadeIn(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) +
-                    slideInVertically(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) { it / 3 },
-            exit = fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
-                    slideOutVertically(spring(stiffness = Spring.StiffnessMedium)) { it / 3 },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = 20.dp,
-                    bottom = navBarInset + 24.dp + 56.dp + 12.dp
-                )
-        ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FabActionItem(
-                    label = "Yes / No",
-                    icon = Icons.Rounded.CheckBox,
-                    onClick = {
-                        haptics.fabToggle()
-                        onCloseFab()
-                        onSelectCreationType(HabitType.YES_NO)
-                    }
-                )
-                FabActionItem(
-                    label = "Measurable",
-                    icon = Icons.Rounded.Tag,
-                    onClick = {
-                        haptics.fabToggle()
-                        onCloseFab()
-                        onSelectCreationType(HabitType.MEASURABLE)
-                    }
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = if (isFabExpanded) "Close add options" else "Add habit",
+                    modifier = Modifier
+                        .size(24.dp)
+                        .rotate(fabRotation)
                 )
             }
         }
@@ -267,24 +290,21 @@ private fun NavigationTabItem(
         onClick = onClick,
         shape = CircleShape,
         color = containerColor,
-        modifier = Modifier.padding(vertical = 6.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics {
+                    contentDescription = label
+                    selected = isSelected
+                }
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
                 tint = contentColor,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = contentColor
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -300,17 +320,14 @@ private fun FabActionItem(
         onClick = onClick,
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer,
-        tonalElevation = 6.dp,
-        shadowElevation = 8.dp
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        tonalElevation = 3.dp,
+        shadowElevation = 4.dp,
+        modifier = Modifier.height(48.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(
-                start = 18.dp,
-                end = 22.dp,
-                top = 13.dp,
-                bottom = 13.dp
-            )
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -321,7 +338,7 @@ private fun FabActionItem(
             Spacer(modifier = Modifier.width(10.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }

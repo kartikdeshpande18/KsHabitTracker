@@ -1,6 +1,12 @@
 package com.kartiks.habittracker.ui.screens.statistics
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -354,62 +360,71 @@ fun HabitDetailScreen(
                         }
 
                         // Selected indicator date details
-                        selectedConsistencyDate?.let { date ->
-                            val record = allRecords.find { it.habitId == habit.id && it.date == date }
-                            val isScheduled = habit.isScheduledOn(date)
-                            val isFuture = date.isAfter(today)
-                            val isDone = habit.isCompletedWith(record)
-                            val isPartial = habit.type == HabitType.MEASURABLE && !isDone && (record?.currentValue ?: 0.0) > 0.0
+                        AnimatedContent(
+                            targetState = selectedConsistencyDate,
+                            transitionSpec = {
+                                fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                            },
+                            label = "consistency_detail_transition"
+                        ) { date ->
+                            if (date != null) {
+                                val record = allRecords.find { it.habitId == habit.id && it.date == date }
+                                val isScheduled = habit.isScheduledOn(date)
+                                val isFuture = date.isAfter(today)
+                                val isDone = habit.isCompletedWith(record)
+                                val isPartial = habit.type == HabitType.MEASURABLE && !isDone && (record?.currentValue ?: 0.0) > 0.0
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.surfaceContainer,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(
-                                        text = date.format(DateTimeFormatter.ofPattern("MMM d")),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = date.format(DateTimeFormatter.ofPattern("MMM d")),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
 
-                                    val statusText = when {
-                                        isFuture -> "Future"
-                                        !isScheduled -> "Not scheduled"
-                                        habit.type == HabitType.MEASURABLE -> {
-                                            val cur = record?.currentValue ?: 0.0
-                                            val target = habit.targetValue
-                                            val curStr = if (cur % 1.0 == 0.0) cur.toInt().toString() else String.format("%.1f", cur)
-                                            val targetStr = if (target % 1.0 == 0.0) target.toInt().toString() else String.format("%.1f", target)
-                                            val attainment = if (isDone) "Completed" else if (isPartial) "Partial" else "No progress"
-                                            "$curStr / $targetStr ${habit.unit} • $attainment"
+                                        val statusText = when {
+                                            isFuture -> "Future"
+                                            !isScheduled -> "Not scheduled"
+                                            habit.type == HabitType.MEASURABLE -> {
+                                                val cur = record?.currentValue ?: 0.0
+                                                val target = habit.targetValue
+                                                val curStr = if (cur % 1.0 == 0.0) cur.toInt().toString() else String.format("%.1f", cur)
+                                                val targetStr = if (target % 1.0 == 0.0) target.toInt().toString() else String.format("%.1f", target)
+                                                val attainment = if (isDone) "Completed" else if (isPartial) "Partial" else "No progress"
+                                                "$curStr / $targetStr ${habit.unit} • $attainment"
+                                            }
+                                            isDone -> "Completed"
+                                            else -> "Not completed"
                                         }
-                                        isDone -> "Completed"
-                                        else -> "Not completed"
-                                    }
 
-                                    val statusColor = when {
-                                        isDone -> MaterialTheme.colorScheme.primary
-                                        isPartial -> MaterialTheme.colorScheme.tertiary
-                                        isFuture || !isScheduled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
+                                        val statusColor = when {
+                                            isDone -> MaterialTheme.colorScheme.primary
+                                            isPartial -> MaterialTheme.colorScheme.tertiary
+                                            isFuture || !isScheduled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
 
-                                    Text(
-                                        text = statusText,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = statusColor
-                                    )
+                                        Text(
+                                            text = statusText,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = statusColor
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -24,13 +25,17 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Medication
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -38,7 +43,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,10 +56,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kartiks.habittracker.domain.model.Habit
 import com.kartiks.habittracker.domain.model.HabitFrequency
@@ -145,6 +160,7 @@ fun CreateHabitBottomSheet(
     var reminderMinute by remember(initialHabit) {
         mutableIntStateOf(initialHabit?.reminderTime?.minute ?: 0)
     }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -378,34 +394,61 @@ fun CreateHabitBottomSheet(
             }
 
             if (reminderEnabled) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    onClick = { showTimePicker = true },
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    OutlinedTextField(
-                        value = reminderHour.toString(),
-                        onValueChange = {
-                            val h = it.toIntOrNull()
-                            if (h != null && h in 0..23) reminderHour = h
-                        },
-                        label = { Text("Hour (0-23)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = String.format("%02d", reminderMinute),
-                        onValueChange = {
-                            val m = it.toIntOrNull()
-                            if (m != null && m in 0..59) reminderMinute = m
-                        },
-                        label = { Text("Minute (0-59)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = "Reminder Time",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    text = "Reminder Time",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = String.format("%02d:%02d", reminderHour, reminderMinute),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        TextButton(onClick = { showTimePicker = true }) {
+                            Text("Set Time")
+                        }
+                    }
                 }
+            }
+
+            if (showTimePicker) {
+                ReminderTimePickerDialog(
+                    initialHour = reminderHour,
+                    initialMinute = reminderMinute,
+                    onDismiss = { showTimePicker = false },
+                    onConfirm = { h, m ->
+                        reminderHour = h
+                        reminderMinute = m
+                        showTimePicker = false
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -447,4 +490,210 @@ fun CreateHabitBottomSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderTimePickerDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (hour: Int, minute: Int) -> Unit
+) {
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true
+    )
+    var isInputMode by remember { mutableStateOf(false) }
+
+    // Text field values for manual keyboard input mode
+    var hourText by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = String.format("%02d", initialHour),
+                selection = TextRange(0, 2)
+            )
+        )
+    }
+    var minuteText by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = String.format("%02d", initialMinute),
+                selection = TextRange(0, 2)
+            )
+        )
+    }
+
+    val focusManager = LocalFocusManager.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (isInputMode) "Enter reminder time" else "Select reminder time",
+                style = MaterialTheme.typography.titleMedium
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isInputMode) {
+                    // Manual / Keyboard Time Input Layout
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp)
+                    ) {
+                        // Hour Field with auto-select on focus and replace on typing
+                        OutlinedTextField(
+                            value = hourText,
+                            onValueChange = { newValue ->
+                                val digits = newValue.text.filter { it.isDigit() }.take(2)
+                                val num = digits.toIntOrNull()
+                                if (digits.isEmpty() || (num != null && num in 0..23)) {
+                                    hourText = newValue.copy(text = digits)
+                                    if (digits.length == 2 || (num != null && num > 2)) {
+                                        focusManager.moveFocus(FocusDirection.Next)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .width(96.dp)
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused && hourText.text.isNotEmpty()) {
+                                        hourText = hourText.copy(
+                                            selection = TextRange(0, hourText.text.length)
+                                        )
+                                    }
+                                },
+                            textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                textAlign = TextAlign.Center
+                            ),
+                            label = { Text("Hour", style = MaterialTheme.typography.labelSmall) },
+                            placeholder = { Text("00", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Next) }
+                            ),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium
+                        )
+
+                        Text(
+                            text = ":",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
+                        // Minute Field with auto-select on focus and replace on typing
+                        OutlinedTextField(
+                            value = minuteText,
+                            onValueChange = { newValue ->
+                                val digits = newValue.text.filter { it.isDigit() }.take(2)
+                                val num = digits.toIntOrNull()
+                                if (digits.isEmpty() || (num != null && num in 0..59)) {
+                                    minuteText = newValue.copy(text = digits)
+                                    if (digits.length == 2) {
+                                        focusManager.clearFocus()
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .width(96.dp)
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused && minuteText.text.isNotEmpty()) {
+                                        minuteText = minuteText.copy(
+                                            selection = TextRange(0, minuteText.text.length)
+                                        )
+                                    }
+                                },
+                            textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                textAlign = TextAlign.Center
+                            ),
+                            label = { Text("Minute", style = MaterialTheme.typography.labelSmall) },
+                            placeholder = { Text("00", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { focusManager.clearFocus() }
+                            ),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium
+                        )
+                    }
+                    Text(
+                        text = "24-hour format (00:00 – 23:59)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    // Material 3 Clock Dial Picker
+                    TimePicker(
+                        state = timePickerState,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val finalHour = if (isInputMode) {
+                        (hourText.text.toIntOrNull() ?: timePickerState.hour).coerceIn(0, 23)
+                    } else {
+                        timePickerState.hour
+                    }
+                    val finalMinute = if (isInputMode) {
+                        (minuteText.text.toIntOrNull() ?: timePickerState.minute).coerceIn(0, 59)
+                    } else {
+                        timePickerState.minute
+                    }
+                    onConfirm(finalHour, finalMinute)
+                }
+            ) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = {
+                        if (!isInputMode) {
+                            hourText = TextFieldValue(
+                                text = String.format("%02d", timePickerState.hour),
+                                selection = TextRange(0, 2)
+                            )
+                            minuteText = TextFieldValue(
+                                text = String.format("%02d", timePickerState.minute),
+                                selection = TextRange(0, 2)
+                            )
+                            isInputMode = true
+                        } else {
+                            isInputMode = false
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (isInputMode) Icons.Default.Schedule else Icons.Default.Keyboard,
+                        contentDescription = if (isInputMode) "Switch to clock dial" else "Switch to keyboard input"
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        }
+    )
 }

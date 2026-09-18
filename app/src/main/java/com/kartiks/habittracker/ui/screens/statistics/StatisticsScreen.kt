@@ -1,5 +1,11 @@
 package com.kartiks.habittracker.ui.screens.statistics
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,6 +53,8 @@ fun StatisticsScreen(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier
 ) {
+    val haptics = com.kartiks.habittracker.ui.interaction.rememberAppHaptics()
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -114,7 +122,12 @@ fun StatisticsScreen(
                     }
                     FilterChip(
                         selected = selectedPeriod == period,
-                        onClick = { onSelectPeriod(period) },
+                        onClick = {
+                            if (selectedPeriod != period) {
+                                haptics.tabSelected()
+                            }
+                            onSelectPeriod(period)
+                        },
                         label = { Text(label) },
                         shape = CircleShape
                     )
@@ -124,41 +137,50 @@ fun StatisticsScreen(
 
         // Global KPI Metrics Grid (2x2)
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    KpiStatCard(
-                        title = "Completion Rate",
-                        value = "${(globalStats.completionRate * 100).toInt()}%",
-                        subtitle = "Overall adherence",
-                        modifier = Modifier.weight(1f)
-                    )
-                    KpiStatCard(
-                        title = "Current Streak",
-                        value = "${globalStats.currentStreak} days",
-                        subtitle = "Consecutive active",
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+            AnimatedContent(
+                targetState = selectedPeriod to globalStats,
+                transitionSpec = {
+                    fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                    fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                },
+                label = "kpi_grid_transition"
+            ) { (_, stats) ->
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        KpiStatCard(
+                            title = "Completion Rate",
+                            value = "${(stats.completionRate * 100).toInt()}%",
+                            subtitle = "Overall adherence",
+                            modifier = Modifier.weight(1f)
+                        )
+                        KpiStatCard(
+                            title = "Current Streak",
+                            value = "${stats.currentStreak} days",
+                            subtitle = "Consecutive active",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    KpiStatCard(
-                        title = "Best Streak",
-                        value = "${globalStats.bestStreak} days",
-                        subtitle = "Personal record",
-                        modifier = Modifier.weight(1f)
-                    )
-                    KpiStatCard(
-                        title = "Total Completions",
-                        value = "${globalStats.totalCompletions}",
-                        subtitle = "Recorded completions",
-                        modifier = Modifier.weight(1f)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        KpiStatCard(
+                            title = "Best Streak",
+                            value = "${stats.bestStreak} days",
+                            subtitle = "Personal record",
+                            modifier = Modifier.weight(1f)
+                        )
+                        KpiStatCard(
+                            title = "Total Completions",
+                            value = "${stats.totalCompletions}",
+                            subtitle = "Recorded completions",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }

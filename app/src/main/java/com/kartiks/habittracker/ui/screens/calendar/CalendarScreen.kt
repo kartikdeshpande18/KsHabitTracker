@@ -1,5 +1,11 @@
 package com.kartiks.habittracker.ui.screens.calendar
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +74,7 @@ fun CalendarScreen(
 ) {
     var displayedMonth by remember { mutableStateOf(YearMonth.from(selectedDate)) }
     val today = LocalDate.now()
+    val haptics = com.kartiks.habittracker.ui.interaction.rememberAppHaptics()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -189,88 +196,96 @@ fun CalendarScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Month Days Grid
-                    val firstDayOfMonth = displayedMonth.atDay(1)
-                    val daysInMonth = displayedMonth.lengthOfMonth()
-                    // 1 = Monday ... 7 = Sunday
-                    val dayOfWeekOffset = firstDayOfMonth.dayOfWeek.value - 1
+                    // Animated Month Days Grid
+                    AnimatedContent(
+                        targetState = displayedMonth,
+                        transitionSpec = {
+                            fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                            fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                        },
+                        label = "calendar_month_grid"
+                    ) { targetMonth ->
+                        val firstDayOfMonth = targetMonth.atDay(1)
+                        val daysInMonth = targetMonth.lengthOfMonth()
+                        val dayOfWeekOffset = firstDayOfMonth.dayOfWeek.value - 1
+                        val totalCells = ((dayOfWeekOffset + daysInMonth + 6) / 7) * 7
+                        val recordsByDate = allRecords.groupBy { it.date }
 
-                    val totalCells = ((dayOfWeekOffset + daysInMonth + 6) / 7) * 7
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (row in 0 until (totalCells / 7)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceAround
+                                ) {
+                                    for (col in 0 until 7) {
+                                        val cellIndex = row * 7 + col
+                                        val dayNum = cellIndex - dayOfWeekOffset + 1
+                                        if (dayNum in 1..daysInMonth) {
+                                            val date = targetMonth.atDay(dayNum)
+                                            val isToday = date == today
+                                            val isSelected = date == selectedDate
+                                            val isFuture = date.isAfter(today)
 
-                    val recordsByDate = allRecords.groupBy { it.date }
+                                            val dayRecords = recordsByDate[date] ?: emptyList()
+                                            val scheduledHabits = allHabits.filter { it.isScheduledOn(date) }
+                                            val scheduledCount = scheduledHabits.size
+                                            val completedCount = if (scheduledCount > 0) {
+                                                scheduledHabits.count { habit ->
+                                                    val rec = dayRecords.find { it.habitId == habit.id }
+                                                    habit.isCompletedWith(rec)
+                                                }
+                                            } else 0
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (row in 0 until (totalCells / 7)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceAround
-                            ) {
-                                for (col in 0 until 7) {
-                                    val cellIndex = row * 7 + col
-                                    val dayNum = cellIndex - dayOfWeekOffset + 1
-                                    if (dayNum in 1..daysInMonth) {
-                                        val date = displayedMonth.atDay(dayNum)
-                                        val isToday = date == today
-                                        val isSelected = date == selectedDate
-                                        val isFuture = date.isAfter(today)
-
-                                        val dayRecords = recordsByDate[date] ?: emptyList()
-                                        val scheduledHabits = allHabits.filter { it.isScheduledOn(date) }
-                                        val scheduledCount = scheduledHabits.size
-                                        val completedCount = if (scheduledCount > 0) {
-                                            scheduledHabits.count { habit ->
-                                                val rec = dayRecords.find { it.habitId == habit.id }
-                                                habit.isCompletedWith(rec)
+                                            val containerColor = when {
+                                                isFuture -> Color.Transparent
+                                                scheduledCount == 0 -> Color.Transparent
+                                                completedCount == 0 -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.35f)
+                                                completedCount == scheduledCount -> MaterialTheme.colorScheme.primaryContainer
+                                                else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f)
                                             }
-                                        } else 0
 
-                                        // Data-driven completion tones (0%, partial, 100%), with Today and Selected rings layered without erasing completion colors
-                                        val containerColor = when {
-                                            isFuture -> Color.Transparent
-                                            scheduledCount == 0 -> Color.Transparent
-                                            completedCount == 0 -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.35f)
-                                            completedCount == scheduledCount -> MaterialTheme.colorScheme.primaryContainer
-                                            else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f)
-                                        }
+                                            val border = when {
+                                                isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                                isToday -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
+                                                else -> null
+                                            }
 
-                                        val border = when {
-                                            isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                                            isToday -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
-                                            else -> null
-                                        }
+                                            val textColor = when {
+                                                isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                                scheduledCount == 0 -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                                completedCount == scheduledCount -> MaterialTheme.colorScheme.onPrimaryContainer
+                                                isSelected -> MaterialTheme.colorScheme.primary
+                                                else -> MaterialTheme.colorScheme.onSurface
+                                            }
 
-                                        val textColor = when {
-                                            isFuture -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                            scheduledCount == 0 -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                            completedCount == scheduledCount -> MaterialTheme.colorScheme.onPrimaryContainer
-                                            isSelected -> MaterialTheme.colorScheme.primary
-                                            else -> MaterialTheme.colorScheme.onSurface
-                                        }
-
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = containerColor,
-                                            border = border,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .aspectRatio(1f)
-                                                .padding(2.dp)
-                                                .clickable { onSelectDate(date) }
-                                        ) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier.fillMaxSize()
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = containerColor,
+                                                border = border,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(1f)
+                                                    .padding(2.dp)
+                                                    .clickable {
+                                                        haptics.dateSelected()
+                                                        onSelectDate(date)
+                                                    }
                                             ) {
-                                                Text(
-                                                    text = dayNum.toString(),
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-                                                    color = textColor
-                                                )
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                    Text(
+                                                        text = dayNum.toString(),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                                        color = textColor
+                                                    )
+                                                }
                                             }
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
                                         }
-                                    } else {
-                                        Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
                             }
@@ -282,91 +297,100 @@ fun CalendarScreen(
 
         // Details for Selected Date
         item {
-            val selectedRecords = allRecords.filter { it.date == selectedDate }
-            val scheduledHabitsForSelectedDate = allHabits.filter { it.isScheduledOn(selectedDate) }
-            val completed = scheduledHabitsForSelectedDate.count { habit ->
-                val rec = selectedRecords.find { it.habitId == habit.id }
-                habit.isCompletedWith(rec)
-            }
-            val scheduled = scheduledHabitsForSelectedDate.size
+            AnimatedContent(
+                targetState = selectedDate,
+                transitionSpec = {
+                    fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                    fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                },
+                label = "calendar_selected_date_details"
+            ) { date ->
+                val selectedRecords = allRecords.filter { it.date == date }
+                val scheduledHabitsForSelectedDate = allHabits.filter { it.isScheduledOn(date) }
+                val completed = scheduledHabitsForSelectedDate.count { habit ->
+                    val rec = selectedRecords.find { it.habitId == habit.id }
+                    habit.isCompletedWith(rec)
+                }
+                val scheduled = scheduledHabitsForSelectedDate.size
 
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "$completed / $scheduled completed",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                Card(
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = date.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "$completed / $scheduled completed",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    if (scheduledHabitsForSelectedDate.isEmpty()) {
-                        Text(
-                            text = "No habits scheduled for this day",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        scheduledHabitsForSelectedDate.forEach { habit ->
-                            val rec = selectedRecords.find { it.habitId == habit.id }
-                            val isDone = habit.isCompletedWith(rec)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.size(20.dp)
+                        if (scheduledHabitsForSelectedDate.isEmpty()) {
+                            Text(
+                                text = "No habits scheduled for this day",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            scheduledHabitsForSelectedDate.forEach { habit ->
+                                val rec = selectedRecords.find { it.habitId == habit.id }
+                                val isDone = habit.isCompletedWith(rec)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        if (isDone) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = if (isDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            if (isDone) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
                                         }
                                     }
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = habit.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    if (habit.type == HabitType.MEASURABLE) {
-                                        val cur = rec?.currentValue ?: 0.0
-                                        val curStr = if (cur % 1.0 == 0.0) cur.toInt().toString() else String.format("%.1f", cur)
-                                        val targetStr = if (habit.targetValue % 1.0 == 0.0) habit.targetValue.toInt().toString() else String.format("%.1f", habit.targetValue)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
                                         Text(
-                                            text = "$curStr / $targetStr ${habit.unit}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = habit.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
+                                        if (habit.type == HabitType.MEASURABLE) {
+                                            val cur = rec?.currentValue ?: 0.0
+                                            val curStr = if (cur % 1.0 == 0.0) cur.toInt().toString() else String.format("%.1f", cur)
+                                            val targetStr = if (habit.targetValue % 1.0 == 0.0) habit.targetValue.toInt().toString() else String.format("%.1f", habit.targetValue)
+                                            Text(
+                                                text = "$curStr / $targetStr ${habit.unit}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }
